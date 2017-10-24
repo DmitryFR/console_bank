@@ -13,8 +13,18 @@ class TestConsoleBank(unittest.TestCase):
         test_data = {'username': 'testt', 'firstname': 'testt', 'lastname': 'testt', 'balance':1000, 'password':'testt'} # PreCondition
         r = requests.post('http://0.0.0.0:5000/users', data=test_data) # TestCase Description
         self.assertEqual(r.status_code, 201)
+        r = requests.get('http://0.0.0.0:5000/users')  #
+        users = r.json()  #
+        for user in users['_items']:  # PreConditional
+            if user['username'] == 'testt':  #
+                self.fser = user  #
+                break
+        self.assertEqual(self.fser['firstname'], 'testt')
+        self.assertEqual(self.fser['lastname'], 'testt')
+        self.assertEqual(self.fser['balance'], 1000)
+        self.assertEqual(self.fser['password'], 'testt')
 
-    def test_b (self):
+    def test_b(self):
         # testing post request
         # Функциональный тест, проверяет добавление нового пользователя в систему, со всеми необходимыми параметрами, но с уже использованным логином
         # Ожидается негативный результат, код ошибки при добавлении в базу 422, что означает невозможность добавить пользователя с уже взятым логином.
@@ -42,19 +52,57 @@ class TestConsoleBank(unittest.TestCase):
             if user['username'] == 'testt':           #
                 self.fser = user                      #
                 break
-        r = requests.patch('http://0.0.0.0:5000/users/' + self.fser['_id'], data={'balance': 2000}, headers={'If-Match': self.fser['_etag']}) # Test case description
+        r = requests.patch('http://0.0.0.0:5000/users/' + self.fser['_id'], data={'balance': 0}, headers={'If-Match': self.fser['_etag']}) # Test case description
         self.assertEqual(r.status_code, 200)
+        r = requests.get('http://0.0.0.0:5000/users')  #
+        users = r.json()  #
+        for user in users['_items']:  # PreConditional
+            if user['username'] == 'testt':  #
+                self.fser = user  #
+                break
+        self.assertEqual(self.fser['balance'], 0)
 
     def test_e(self):
+        # Функциональный тест6 проверяет праивльность работы многопоточности в сервисе
+        # Тест сначала увеличивает баланс тестового пользователя до 10, затем уменьшает на 10
+        # Ожидается положительный результат, баланс пользователя равен 0, что означает корректную работу
+        for i in range(11):
+            r = requests.get('http://0.0.0.0:5000/users')  #
+            users = r.json()                               #
+            for user in users['_items']:                   # PreConditional
+                if user['username'] == 'testt':            #
+                    self.fser = user                       #
+                    break
+            r = requests.patch('http://0.0.0.0:5000/users/' + self.fser['_id'], data={'balance': i},
+                               headers={'If-Match': self.fser['_etag']})
+        for i in range(10):
+            r = requests.get('http://0.0.0.0:5000/users')  #
+            users = r.json()                               #
+            for user in users['_items']:                   # PreConditional
+                if user['username'] == 'testt':            #
+                    self.fser = user                       #
+                    break
+            self.fser['balance'] -= 1
+            r = requests.patch('http://0.0.0.0:5000/users/' + self.fser['_id'], data={'balance': self.fser['balance']},
+                               headers={'If-Match': self.fser['_etag']})
+        r = requests.get('http://0.0.0.0:5000/users')  #
+        users = r.json()
+        for user in users['_items']:
+            if user['username'] == 'testt':
+                self.fser = user
+                break
+        self.assertEqual(self.fser['balance'],0)
+
+    def test_f(self):
         # Нагрузочный тест, проверяет способность базы данных ответить на множество запросов к одному ресурсу
         # Тест необходим для имитации работы определенного количества пользователей на ресурсе
         # Ожидается позитивный результат, код успешного выполнения 200
-        for i in range(100): #PreConditional
+        for i in range(50): #PreConditional
             r=requests.get('http://0.0.0.0:5000/users')# Test case description
             self.assertEqual(r.status_code, 200)
 
 
-    def test_f(self):
+    def test_j(self):
         # testing delete request
         # Функциональный тест, проверяющий возможность удалить пользователя с указанным логином
         # Такое осуществимо только при совпадении специального тега etag
@@ -68,6 +116,7 @@ class TestConsoleBank(unittest.TestCase):
                 r = requests.delete('http://0.0.0.0:5000/users/' + user['_id'], headers={'If-Match': user['_etag']}) #Test Case description
                 self.assertEqual(r.status_code, 204)
                 break
+
     def test_h (self):
         # testing post request
         # Функциональный тест, проверяет добавление нового пользователя в систему с неполным набором парамтеров

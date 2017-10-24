@@ -1,4 +1,25 @@
 import requests
+import threading
+lock = threading.Semaphore(1)
+
+def patch_plus(bal,tag,idd):
+    r = requests.patch('http://0.0.0.0:5000/users/' + idd, data={'balance': bal}, headers={'If-Match': tag})
+    lock.release()
+    logFile.write('Plus: HTTP code: ' + str(r.status_code) + '\n')
+    if r.status_code == 200:
+        print("Сумма успешно добавлена на счет!")
+    else:
+        print('Ошибка!')
+
+def patch_transfer(bal,tag,idd,oper):
+    r = requests.patch('http://0.0.0.0:5000/users/' + idd,json={'operations': oper, 'balance': bal}, headers={'If-Match': tag})
+    lock.release()
+    logFile.write('Transfer: HTTP code 1: ' + str(r.status_code))
+    if r.status_code == 200:
+        print('Перевод успешно выполнен!')
+    else:
+        print("Ошибка!")
+
 print('Здравствуйте!')
 print("Добро пожаловать в консольную банковскую систему!")
 print("Если вы уже зарегестрированы введите login, если у вас еще нет аккаунта введите reg.")
@@ -131,13 +152,19 @@ while 1:
                 current_user['operations'].append(transferInfo)
                 toUsr['operations'].append(transferInfo)
                 # Отправка запроса на изменение полей в бд
-                r1 = requests.patch('http://0.0.0.0:5000/users/' + current_user['_id'], json={'operations':current_user['operations'], 'balance':current_user['balance']}, headers={'If-Match':current_user['_etag']})
-                r2 = requests.patch('http://0.0.0.0:5000/users/' + toUsr['_id'], json={'operations':toUsr['operations'], 'balance':toUsr['balance']}, headers= {'If-Match':toUsr['_etag']})
-                logFile.write('Transfer: HTTP code 1: ' + str(r1.status_code) + ' HTTP code 2: ' + str(r2.status_code)+ '\n')
-                if r1.status_code == 200 and r2.status_code == 200:
-                   print('Перевод успешно выполнен!')
-                else:
-                    print ("Ошибка!")
+                # r1 = requests.patch('http://0.0.0.0:5000/users/' + current_user['_id'], json={'operations':current_user['operations'], 'balance':current_user['balance']}, headers={'If-Match':current_user['_etag']})
+                # r2 = requests.patch('http://0.0.0.0:5000/users/' + toUsr['_id'], json={'operations':toUsr['operations'], 'balance':toUsr['balance']}, headers= {'If-Match':toUsr['_etag']})
+                # logFile.write('Transfer: HTTP code 1: ' + str(r1.status_code) + ' HTTP code 2: ' + str(r2.status_code)+ '\n')
+                # if r1.status_code == 200 and r2.status_code == 200:
+                #    print('Перевод успешно выполнен!')
+                # else:
+                #     print ("Ошибка!")
+                thread1 = threading.Thread(target=patch_transfer, args=(current_user['balance'], current_user['_etag'], current_user['_id'], current_user['operations']))
+                thread1.start()
+                lock.acquire()
+                thread2 = threading.Thread(target= patch_transfer, args=(toUsr['balance'], toUsr['_etag'], toUsr['_id'], toUsr['operations']))
+                thread2.start()
+                lock.acquire()
 
         else:
             logFile.write('Transfer: recieving user is not found\n')
@@ -158,12 +185,15 @@ while 1:
                 break
         current_user['balance'] += plusAmount
         # Сохранение изменений в бд
-        r = requests.patch('http://0.0.0.0:5000/users/'+current_user['_id'], data= {'balance':current_user['balance']}, headers= {'If-Match':current_user['_etag']})
-        logFile.write('Plus: HTTP code: ' + str(r.status_code)+ '\n')
-        if r.status_code == 200:
-            print("Сумма успешно добавлена на счет!")
-        else:
-            print ('Ошибка!')
+        # r = requests.patch('http://0.0.0.0:5000/users/'+current_user['_id'], data= {'balance':current_user['balance']}, headers= {'If-Match':current_user['_etag']})
+        # logFile.write('Plus: HTTP code: ' + str(r.status_code)+ '\n')
+        # if r.status_code == 200:
+        #     print("Сумма успешно добавлена на счет!")
+        # else:
+        #     print ('Ошибка!')
+        thread = threading.Thread(target=patch_plus, args=(current_user['balance'], current_user['_etag'], current_user['_id']))
+        thread.start()
+        lock.acquire()
     elif key_word == 'statement':
         # Получение свежей информации о текущем пользователе
         r = requests.get('http://0.0.0.0:5000/users')
